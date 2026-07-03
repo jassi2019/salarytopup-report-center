@@ -186,7 +186,7 @@ tr.total td{background:var(--gold-bg);font-weight:800;color:var(--green);border-
 <script>
 /* ================= STATE ================= */
 const CH = {
-  crm:{label:'CRM', rows:[], headers:[], map:{mobile:'',status:'',date:''}},
+  crm:{label:'CRM', rows:[], headers:[], map:{mobile:'',status:'',date:'',usertype:''}},
   wa: {label:'WhatsApp', rows:[], headers:[], map:{mobile:'',status:'',cost:''}},
   sms:{label:'SMS', rows:[], headers:[], map:{mobile:'',status:'',type:'',cost:''}},
   rcs:{label:'RCS', rows:[], headers:[], map:{mobile:'',status:'',cost:''}},
@@ -231,6 +231,13 @@ function crmBucket(s){
   if(/disburs/.test(s)) return 'disbursed';
   if(/reject|declin|not eligible|cancel/.test(s)) return 'rejected';
   return 'inprogress';
+}
+/* User type bucket */
+function userTypeBucket(v){
+  const s = String(v||'').toLowerCase().trim();
+  if(/re.?loan|repeat|renew|existing|old/.test(s)) return 'reloan';
+  if(/new|fresh|first/.test(s)) return 'new';
+  return 'new'; // default to new if unclear
 }
 /* Channel delivery buckets */
 function chBucket(ch, s){
@@ -313,7 +320,10 @@ function autoMap(ch){
   } else {
     m.mobile = guessCol(h,['mobile','phone','msisdn','contact','whatsapp','number','to']);
     m.status = guessCol(h,['status','state','delivery','result','disposition']);
-    if(ch==='crm') m.date = guessCol(h,['created','date','time','applied']);
+    if(ch==='crm'){
+      m.date = guessCol(h,['created','date','time','applied']);
+      m.usertype = guessCol(h,['user type','usertype','user_type','loan type','loantype','loan_type','type','customer type','cust type','category']);
+    }
     if(ch==='sms') m.type = guessCol(h,['type','route','category','traffic']);
     if(ch!=='crm') m.cost = guessCol(h,['cost','charge','price','credit','rate','amount']);
   }
@@ -334,7 +344,7 @@ function buildMapUI(){
     if(ch==='ads'){
       html+=`<div class="maprow"><b>${CH[ch].label}</b> Cost: ${sel('cost')} Clicks: ${sel('clicks')} Conversions: ${sel('conv')}</div>`;
     } else if(ch==='crm'){
-      html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Date: ${sel('date')}</div>`;
+      html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Date: ${sel('date')} User Type: ${sel('usertype')}</div>`;
     } else if(ch==='sms'){
       html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Msg Type: ${sel('type')} Panel Cost: ${sel('cost')}</div>`;
     } else {
@@ -411,16 +421,21 @@ function render(){
   const dcol = CH.crm.map.date;
   hint.textContent = dcol ? `CRM filtered: ${crmRows.length.toLocaleString('en-IN')} / ${CH.crm.rows.length.toLocaleString('en-IN')} rows` : '⚠️ CRM date column nahi mila — full file use ho rahi hai';
 
-  // CRM index: mobile -> bucket
+  // CRM index: mobile -> bucket + user type tracking
   const crmMap = new Map();
-  const mcol = CH.crm.map.mobile, scol = CH.crm.map.status;
+  const crmTypeMap = new Map(); // mobile -> 'new'|'reloan'
+  const mcol = CH.crm.map.mobile, scol = CH.crm.map.status, utcol = CH.crm.map.usertype;
   let crmTot={landed:0,disbursed:0,rejected:0,inprogress:0};
+  let crmByType={new:{landed:0,disbursed:0,rejected:0,inprogress:0}, reloan:{landed:0,disbursed:0,rejected:0,inprogress:0}};
+  const hasUserType = !!utcol;
   for(const r of crmRows){
     const mob = normMobile(r[mcol]); if(!mob && mcol) continue;
     const b = crmBucket(scol? r[scol]:'');
+    const ut = hasUserType ? userTypeBucket(r[utcol]) : 'new';
     crmTot.landed++; crmTot[b]++;
-    if(mob && !crmMap.has(mob)) crmMap.set(mob, b);
-    else if(mob && b==='disbursed') crmMap.set(mob,'disbursed');
+    crmByType[ut].landed++; crmByType[ut][b]++;
+    if(mob && !crmMap.has(mob)){ crmMap.set(mob, b); crmTypeMap.set(mob, ut); }
+    else if(mob && b==='disbursed'){ crmMap.set(mob,'disbursed'); crmTypeMap.set(mob, ut); }
   }
 
   const costs = {wa:num(document.getElementById('cost_wa').value),
@@ -506,6 +521,28 @@ function render(){
       <div class="kpi"><div class="num" style="color:var(--purple)">${totDisb? inr(totCost/totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
       <div class="kpi"><div class="num" style="color:var(--ok);font-size:16px;">${best? '🏆 '+best.name : '—'}</div><div class="lbl">CHEAPEST CPD CHANNEL</div></div>
     </div>
+`;
+    if(hasUserType){
+      const n=crmByType.new, rl=crmByType.reloan;
+      html += `
+      <div style="font-size:13px;font-weight:800;color:var(--green);margin:6px 0 8px;">👤 User Type Breakdown — New vs Reloan</div>
+      <div class="twrap" style="margin-bottom:16px;"><table style="min-width:500px;">
+        <tr><th>User Type</th><th>Landed</th><th>Disbursed</th><th>In Progress</th><th>Rejected</th><th>Disb %</th></tr>
+        <tr><td>🆕 New</td><td>${n.landed.toLocaleString('en-IN')}</td>
+          <td style="font-weight:800;color:var(--ok)">${n.disbursed.toLocaleString('en-IN')}</td>
+          <td>${n.inprogress.toLocaleString('en-IN')}</td><td>${n.rejected.toLocaleString('en-IN')}</td>
+          <td>${n.landed? (n.disbursed/n.landed*100).toFixed(1)+'%':'—'}</td></tr>
+        <tr><td>🔄 Reloan</td><td>${rl.landed.toLocaleString('en-IN')}</td>
+          <td style="font-weight:800;color:var(--ok)">${rl.disbursed.toLocaleString('en-IN')}</td>
+          <td>${rl.inprogress.toLocaleString('en-IN')}</td><td>${rl.rejected.toLocaleString('en-IN')}</td>
+          <td>${rl.landed? (rl.disbursed/rl.landed*100).toFixed(1)+'%':'—'}</td></tr>
+        <tr class="total"><td>TOTAL</td><td>${crmTot.landed.toLocaleString('en-IN')}</td>
+          <td>${crmTot.disbursed.toLocaleString('en-IN')}</td><td>${crmTot.inprogress.toLocaleString('en-IN')}</td>
+          <td>${crmTot.rejected.toLocaleString('en-IN')}</td>
+          <td>${crmTot.landed? (crmTot.disbursed/crmTot.landed*100).toFixed(1)+'%':'—'}</td></tr>
+      </table></div>`;
+    }
+    html += `
     <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">💸 EK DISBURSED LEAD KITNE KI PADI — Channel-wise</div>
     <div class="kpis" style="margin-bottom:16px;">
       ${chans.filter(c=>!c.isAds).map(c=>`
@@ -549,11 +586,12 @@ function render(){
     if(!chans.length) html += `<div class="empty" style="margin-top:12px;">Channel files upload karo — cost analysis yahan aayega.</div>`;
     area.innerHTML = html;
     document.getElementById('dlRow').style.display = 'flex';
-    lastSummary = {modeLbl:'CPD — Cost Per Disbursal Analysis', crmTot, chans, totCost, totDisb, totLand};
+    lastSummary = {modeLbl:'CPD — Cost Per Disbursal Analysis', crmTot, crmByType, hasUserType, chans, totCost, totDisb, totLand};
     return;
   }
 
   const modeLbl = {dpr:'DPR — Daily Performance Report', mtd:'MTD — Month To Date'}[mode];
+  const n=crmByType.new, rl=crmByType.reloan;
   let html = `
   <div class="kpis">
     <div class="kpi"><div class="num">${crmTot.landed.toLocaleString('en-IN')}</div><div class="lbl">CRM LEADS LANDED</div></div>
@@ -562,7 +600,27 @@ function render(){
     <div class="kpi"><div class="num" style="color:var(--bad)">${crmTot.rejected.toLocaleString('en-IN')}</div><div class="lbl">REJECTED</div></div>
     <div class="kpi"><div class="num" style="color:var(--gold)">${inr(totCost)}</div><div class="lbl">TOTAL SPEND</div></div>
     <div class="kpi"><div class="num" style="color:var(--purple)">${totDisb? inr(totCost/totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
-  </div>
+  </div>`;
+  if(hasUserType){
+    html += `
+    <div style="font-size:13px;font-weight:800;color:var(--green);margin:14px 0 8px;">👤 User Type Breakdown — New vs Reloan</div>
+    <div class="twrap" style="margin-bottom:16px;"><table style="min-width:500px;">
+      <tr><th>User Type</th><th>Landed</th><th>Disbursed</th><th>In Progress</th><th>Rejected</th><th>Disb %</th></tr>
+      <tr><td>🆕 New</td><td>${n.landed.toLocaleString('en-IN')}</td>
+        <td style="font-weight:800;color:var(--ok)">${n.disbursed.toLocaleString('en-IN')}</td>
+        <td>${n.inprogress.toLocaleString('en-IN')}</td><td>${n.rejected.toLocaleString('en-IN')}</td>
+        <td>${n.landed? (n.disbursed/n.landed*100).toFixed(1)+'%':'—'}</td></tr>
+      <tr><td>🔄 Reloan</td><td>${rl.landed.toLocaleString('en-IN')}</td>
+        <td style="font-weight:800;color:var(--ok)">${rl.disbursed.toLocaleString('en-IN')}</td>
+        <td>${rl.inprogress.toLocaleString('en-IN')}</td><td>${rl.rejected.toLocaleString('en-IN')}</td>
+        <td>${rl.landed? (rl.disbursed/rl.landed*100).toFixed(1)+'%':'—'}</td></tr>
+      <tr class="total"><td>TOTAL</td><td>${crmTot.landed.toLocaleString('en-IN')}</td>
+        <td>${crmTot.disbursed.toLocaleString('en-IN')}</td><td>${crmTot.inprogress.toLocaleString('en-IN')}</td>
+        <td>${crmTot.rejected.toLocaleString('en-IN')}</td>
+        <td>${crmTot.landed? (crmTot.disbursed/crmTot.landed*100).toFixed(1)+'%':'—'}</td></tr>
+    </table></div>`;
+  }
+  html += `
   <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">${modeLbl} — Channel-wise Funnel</div>
   <div class="twrap"><table>
     <tr><th>Channel</th><th>Pushed</th><th>Delivered</th><th>Failed</th><th>Cost</th><th>Landed (CRM)</th><th>In Progress</th><th>Rejected</th><th>Disbursed</th><th>CPL</th><th>CPD</th></tr>`;
@@ -594,17 +652,27 @@ function render(){
 
   area.innerHTML = html;
   document.getElementById('dlRow').style.display = 'flex';
-  lastSummary = {modeLbl, crmTot, chans, totCost, totDisb, totLand};
+  lastSummary = {modeLbl, crmTot, crmByType, hasUserType, chans, totCost, totDisb, totLand};
 }
 
 /* ================= EXPORT ================= */
 function downloadReport(){
   if(!lastSummary) return;
-  const {modeLbl, crmTot, chans, totCost, totDisb, totLand} = lastSummary;
+  const {modeLbl, crmTot, crmByType, hasUserType, chans, totCost, totDisb, totLand} = lastSummary;
   const rows = [
     ['SALARYTOPUP — '+modeLbl], ['Generated', new Date().toLocaleString('en-IN')], [],
     ['CRM SUMMARY'], ['Landed', crmTot.landed], ['Disbursed', crmTot.disbursed],
     ['In Progress', crmTot.inprogress], ['Rejected', crmTot.rejected], [],
+  ];
+  if(hasUserType && crmByType){
+    const n=crmByType.new, rl=crmByType.reloan;
+    rows.push(['USER TYPE BREAKDOWN'],
+      ['Type','Landed','Disbursed','In Progress','Rejected','Disb %'],
+      ['New', n.landed, n.disbursed, n.inprogress, n.rejected, n.landed? +(n.disbursed/n.landed*100).toFixed(1)+'%':'—'],
+      ['Reloan', rl.landed, rl.disbursed, rl.inprogress, rl.rejected, rl.landed? +(rl.disbursed/rl.landed*100).toFixed(1)+'%':'—'],
+      []);
+  }
+  rows.push(
     ['CHANNEL FUNNEL'],
     ['Channel','Pushed','Delivered','Failed','Calculated Cost (₹)','Panel Cost (₹)','Cost Match','Landed','In Progress','Rejected','Disbursed','CPL (₹)','CPD (₹)']
   ];
@@ -686,8 +754,22 @@ function summaryTable(s){
     <div class="kpi"><div class="num" style="color:var(--ok)">${(s.crmTot.disbursed||0).toLocaleString('en-IN')}</div><div class="lbl">DISBURSED</div></div>
     <div class="kpi"><div class="num" style="color:var(--gold)">${inr(s.totCost)}</div><div class="lbl">SPEND</div></div>
     <div class="kpi"><div class="num" style="color:var(--purple)">${s.totDisb? inr(s.totCost/s.totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
-  </div>
-  <div class="twrap"><table><tr><th>Channel</th><th>Pushed</th><th>Delivered</th><th>Failed</th><th>Cost</th><th>Landed</th><th>Disbursed</th><th>CPD</th></tr>`;
+  </div>`;
+  if(s.hasUserType && s.crmByType){
+    const n=s.crmByType.new||{landed:0,disbursed:0,inprogress:0,rejected:0};
+    const rl=s.crmByType.reloan||{landed:0,disbursed:0,inprogress:0,rejected:0};
+    h += `<div style="font-size:12px;font-weight:800;color:var(--green);margin:8px 0 6px;">👤 New vs Reloan</div>
+    <div class="twrap" style="margin-bottom:10px;"><table style="min-width:400px;">
+      <tr><th>Type</th><th>Landed</th><th>Disbursed</th><th>In Prog</th><th>Rejected</th><th>Disb %</th></tr>
+      <tr><td>🆕 New</td><td>${n.landed.toLocaleString('en-IN')}</td><td style="color:var(--ok);font-weight:700">${n.disbursed.toLocaleString('en-IN')}</td>
+        <td>${n.inprogress.toLocaleString('en-IN')}</td><td>${n.rejected.toLocaleString('en-IN')}</td>
+        <td>${n.landed?(n.disbursed/n.landed*100).toFixed(1)+'%':'—'}</td></tr>
+      <tr><td>🔄 Reloan</td><td>${rl.landed.toLocaleString('en-IN')}</td><td style="color:var(--ok);font-weight:700">${rl.disbursed.toLocaleString('en-IN')}</td>
+        <td>${rl.inprogress.toLocaleString('en-IN')}</td><td>${rl.rejected.toLocaleString('en-IN')}</td>
+        <td>${rl.landed?(rl.disbursed/rl.landed*100).toFixed(1)+'%':'—'}</td></tr>
+    </table></div>`;
+  }
+  h += `<div class="twrap"><table><tr><th>Channel</th><th>Pushed</th><th>Delivered</th><th>Failed</th><th>Cost</th><th>Landed</th><th>Disbursed</th><th>CPD</th></tr>`;
   for(const c of (s.chans||[])){
     h += `<tr><td>${c.name}</td><td>${c.pushed??''}</td><td>${c.delivered??''}</td><td>${c.failed??''}</td>
       <td class="money">${inr(c.cost)}</td><td>${c.landed??''}</td><td style="font-weight:800;color:var(--ok)">${c.disb??''}</td>
