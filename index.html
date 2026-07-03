@@ -259,7 +259,10 @@ async function loadFiles(ch, input){
   const st = document.getElementById('st_'+ch);
   st.textContent = `✓ ${files.length} file · ${allRows.length.toLocaleString('en-IN')} rows`;
   st.classList.add('ok');
-  buildMapUI(); render();
+  buildMapUI();
+  // Auto-detect date from CRM file and set date picker
+  if(ch==='crm') autoSetDateFromFile();
+  render();
   input.value='';
 }
 function clearCh(ch){
@@ -308,6 +311,36 @@ function buildMapUI(){
   }
   wrap.innerHTML = html;
   box.classList.toggle('show', any);
+}
+
+/* ================= AUTO DATE FROM FILE ================= */
+function autoSetDateFromFile(){
+  const c = CH.crm;
+  if(!c.rows.length || !c.map.date) return;
+  const dcol = c.map.date;
+  // Collect all dates from the CRM file
+  const dateCounts = {};
+  for(const r of c.rows){
+    const d = parseDate(r[dcol]);
+    if(!d) continue;
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    dateCounts[key] = (dateCounts[key]||0) + 1;
+  }
+  const dates = Object.keys(dateCounts);
+  if(!dates.length) return;
+  // Find the date with most rows (majority date in file)
+  dates.sort((a,b)=> dateCounts[b] - dateCounts[a]);
+  const fileDate = dates[0];
+  // Set DPR date picker to file's date
+  document.getElementById('dprDate').value = fileDate;
+  // Set MTD month picker too
+  document.getElementById('mtdMonth').value = fileDate.slice(0,7);
+  // Show hint about detected date
+  const allDates = dates.length;
+  const hint = allDates > 1
+    ? `📅 File date detected: ${fileDate} (${dateCounts[fileDate]} rows) + ${allDates-1} other date(s)`
+    : `📅 File date detected: ${fileDate} (${dateCounts[fileDate]} rows)`;
+  document.getElementById('filterHint').textContent = hint;
 }
 
 /* ================= FILTERING ================= */
