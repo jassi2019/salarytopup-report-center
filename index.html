@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaign Report Center · SalaryTopup</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --green:#0B3D2E; --green-soft:#11503C; --gold:#C29B2E; --gold-bg:#FDF8EC;
@@ -107,37 +108,37 @@ tr.total td{background:var(--gold-bg);font-weight:800;color:var(--green);border-
   </div>
 
   <!-- STEP 2: UPLOADS -->
-  <div class="section-title">📁 STEP 2 — Files Upload Karo (CSV / Excel, multiple bhi chalega)</div>
+  <div class="section-title">📁 STEP 2 — Files Upload Karo (CSV / Excel / ZIP, multiple bhi chalega)</div>
   <div class="grid">
     <div class="ucard" id="card_crm">
       <div class="clr" onclick="clearCh('crm')">✕ Clear</div>
       <div class="icon">🗂️</div><div class="nm">CRM (Whole Day)</div>
       <div class="st" id="st_crm">Required — leads file</div>
-      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('crm',this)"></label>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls,.zip" onchange="loadFiles('crm',this)"></label>
     </div>
     <div class="ucard" id="card_wa">
       <div class="clr" onclick="clearCh('wa')">✕ Clear</div>
       <div class="icon">💬</div><div class="nm">WhatsApp Panel</div>
       <div class="st" id="st_wa">Approved / Not Approved</div>
-      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('wa',this)"></label>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls,.zip" onchange="loadFiles('wa',this)"></label>
     </div>
     <div class="ucard" id="card_sms">
       <div class="clr" onclick="clearCh('sms')">✕ Clear</div>
       <div class="icon">📩</div><div class="nm">SMS Gateway</div>
       <div class="st" id="st_sms">Delivered / Failed</div>
-      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('sms',this)"></label>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls,.zip" onchange="loadFiles('sms',this)"></label>
     </div>
     <div class="ucard" id="card_rcs">
       <div class="clr" onclick="clearCh('rcs')">✕ Clear</div>
       <div class="icon">📱</div><div class="nm">RCS Platform</div>
       <div class="st" id="st_rcs">Pushed / Sent / Failed</div>
-      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('rcs',this)"></label>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls,.zip" onchange="loadFiles('rcs',this)"></label>
     </div>
     <div class="ucard" id="card_ads">
       <div class="clr" onclick="clearCh('ads')">✕ Clear</div>
       <div class="icon">🔍</div><div class="nm">Google Ads</div>
       <div class="st" id="st_ads">Spend / Clicks / Conv.</div>
-      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('ads',this)"></label>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls,.zip" onchange="loadFiles('ads',this)"></label>
       <div class="hint">Ya manual spend: <input type="number" id="adsManual" placeholder="₹" style="width:80px;padding:5px;border:1px solid var(--border);border-radius:8px;" oninput="render()"></div>
     </div>
   </div>
@@ -241,17 +242,48 @@ function chBucket(ch, s){
 }
 
 /* ================= FILE LOADING ================= */
+async function readSpreadsheet(buf){
+  const wb = XLSX.read(buf, {cellDates:true});
+  let rows=[], headers=[];
+  for(const sn of wb.SheetNames){
+    const r = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:''});
+    if(r.length){ rows = rows.concat(r); if(!headers.length) headers = Object.keys(r[0]); }
+  }
+  return {rows, headers};
+}
+async function extractFiles(file){
+  // If ZIP, extract inner CSV/Excel files; otherwise return as-is
+  const name = file.name.toLowerCase();
+  if(!name.endsWith('.zip')) return [file];
+  const buf = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const extracted = [];
+  for(const [path, entry] of Object.entries(zip.files)){
+    if(entry.dir) continue;
+    const fn = path.toLowerCase();
+    if(fn.startsWith('__macosx') || fn.startsWith('.')) continue;
+    if(fn.endsWith('.csv')||fn.endsWith('.xlsx')||fn.endsWith('.xls')){
+      const blob = await entry.async('blob');
+      extracted.push(new File([blob], path.split('/').pop()));
+    }
+  }
+  return extracted;
+}
 async function loadFiles(ch, input){
-  const files = [...input.files]; if(!files.length) return;
+  const rawFiles = [...input.files]; if(!rawFiles.length) return;
   document.getElementById('st_'+ch).textContent = 'Reading...';
+  // Extract ZIP files if any
+  let files = [];
+  for(const f of rawFiles){
+    const extracted = await extractFiles(f);
+    files = files.concat(extracted);
+  }
+  if(!files.length){ document.getElementById('st_'+ch).textContent = 'ZIP mein koi CSV/Excel nahi mila'; return; }
   let allRows=[], headers=[];
   for(const f of files){
     const buf = await f.arrayBuffer();
-    const wb = XLSX.read(buf, {cellDates:true});
-    for(const sn of wb.SheetNames){
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:''});
-      if(rows.length){ allRows = allRows.concat(rows); if(!headers.length) headers = Object.keys(rows[0]); }
-    }
+    const {rows, headers:h} = await readSpreadsheet(buf);
+    if(rows.length){ allRows = allRows.concat(rows); if(!headers.length) headers = h; }
   }
   CH[ch].rows = allRows; CH[ch].headers = headers;
   autoMap(ch);
