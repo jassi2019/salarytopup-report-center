@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign Report Center · SalaryTopup</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --green:#0B3D2E; --green-soft:#11503C; --gold:#C29B2E; --gold-bg:#FDF8EC;
+  --ink:#1E2B26; --muted:#6B8078; --border:#E4EAE7; --light:#F5F7F6;
+  --ok:#2ECC71; --bad:#E74C3C; --warn:#F39C12; --info:#3498DB; --purple:#9B59B6;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif;}
+body{background:linear-gradient(180deg,#F6F8F7,#fff 300px);color:var(--ink);padding:20px 14px 70px;min-height:100vh;}
+.app{max-width:1000px;margin:0 auto;}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+.logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--gold),#A8842A);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 5px 16px rgba(194,155,46,.3);}
+.header h1{font-size:20px;font-weight:800;color:var(--green);}
+.header p{font-size:12px;color:var(--muted);}
+.sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;}
+
+.section-title{font-size:14px;font-weight:800;color:var(--green);margin:22px 0 10px;letter-spacing:.5px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Upload cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+.ucard{background:#fff;border:1.5px dashed var(--border);border-radius:16px;padding:14px;text-align:center;transition:.2s;position:relative;}
+.ucard.loaded{border-style:solid;border-color:var(--ok);background:#F4FDF8;}
+.ucard .icon{font-size:26px;margin-bottom:6px;}
+.ucard .nm{font-weight:700;font-size:13.5px;color:var(--green);}
+.ucard .st{font-size:11px;color:var(--muted);margin:4px 0 8px;min-height:14px;}
+.ucard .st.ok{color:var(--ok);font-weight:600;}
+.btn{display:inline-block;background:var(--green);color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;transition:.2s;}
+.btn:hover{background:var(--green-soft);}
+.btn.gold{background:var(--gold);}
+.btn.ghost{background:#fff;color:var(--green);border:1.5px solid var(--border);}
+.btn.big{padding:13px 26px;font-size:14px;border-radius:12px;}
+input[type=file]{display:none;}
+.clr{position:absolute;top:8px;right:10px;font-size:12px;color:var(--bad);cursor:pointer;font-weight:700;display:none;}
+.ucard.loaded .clr{display:block;}
+
+/* Cost settings */
+.costs{background:var(--gold-bg);border:1px solid #EAD9A8;border-radius:16px;padding:14px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+.cost-item label{font-size:11.5px;font-weight:700;color:var(--gold);display:block;margin-bottom:4px;}
+.cost-item input{width:110px;padding:8px 10px;border:1.5px solid #E0D2A0;border-radius:10px;font-size:14px;font-weight:700;color:#0000CC;background:#fff;}
+.cost-note{font-size:11px;color:var(--muted);width:100%;}
+select.mapsel{padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:11.5px;max-width:150px;background:#fff;color:var(--ink);}
+.mapping{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:10px;font-size:12px;display:none;}
+.mapping.show{display:block;}
+.maprow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+.maprow b{min-width:90px;color:var(--green);}
+
+/* Filter bar */
+.filterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:14px;}
+.fbtn{padding:8px 16px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--muted);transition:.2s;}
+.fbtn.active{background:var(--green);color:#fff;border-color:var(--green);}
+.filterbar input[type=date],.filterbar input[type=month]{padding:7px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:12.5px;}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:13px;text-align:center;box-shadow:0 3px 12px rgba(11,61,46,.05);}
+.kpi .num{font-size:22px;font-weight:800;color:var(--green);}
+.kpi .lbl{font-size:10.5px;color:var(--muted);margin-top:3px;font-weight:600;letter-spacing:.3px;}
+
+/* Table */
+.twrap{overflow-x:auto;border-radius:14px;border:1px solid var(--border);background:#fff;box-shadow:0 3px 14px rgba(11,61,46,.05);}
+table{border-collapse:collapse;width:100%;min-width:900px;}
+th,td{padding:10px 8px;text-align:center;font-size:12px;border-bottom:1px solid #EEF2F0;white-space:nowrap;}
+th{background:var(--green);color:#fff;font-weight:700;font-size:11px;letter-spacing:.3px;}
+td:first-child,th:first-child{text-align:left;padding-left:14px;font-weight:700;}
+tr.total td{background:var(--gold-bg);font-weight:800;color:var(--green);border-top:2px solid var(--gold);}
+.tag{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+.money{color:var(--gold);font-weight:700;}
+
+.empty{background:#fff;border:1.5px dashed var(--border);border-radius:16px;padding:40px 20px;text-align:center;color:var(--muted);font-size:13.5px;}
+.actions{display:flex;gap:10px;justify-content:center;margin:20px 0;flex-wrap:wrap;}
+.footer{text-align:center;margin-top:26px;font-size:11px;color:#9DB0A8;}
+.hint{font-size:11px;color:var(--muted);margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo">📈</div>
+    <div>
+      <h1>Campaign Report Center</h1>
+      <p>SalaryTopup · DPR · MTD · CPD — All Channels</p>
+    </div>
+  </div>
+  <div class="sub">CRM + WhatsApp + SMS + RCS + Google Ads files upload karo → auto number-matching → full funnel report ready.</div>
+
+  <!-- STEP 1: COSTS -->
+  <div class="section-title">💰 STEP 1 — Vendor Costing (Editable)</div>
+  <div class="costs">
+    <div class="cost-item"><label>WhatsApp ₹/msg</label><input type="number" step="0.01" id="cost_wa" value="0.78"></div>
+    <div class="cost-item"><label>SMS Trans. ₹/msg</label><input type="number" step="0.01" id="cost_sms_t" value="0.13"></div>
+    <div class="cost-item"><label>SMS Promo ₹/msg</label><input type="number" step="0.01" id="cost_sms_p" value="0.17"></div>
+    <div class="cost-item"><label>RCS ₹/msg</label><input type="number" step="0.01" id="cost_rcs" value="0.25"></div>
+    <div class="cost-item"><label>Charge basis</label>
+      <select class="mapsel" id="chargeBasis" style="max-width:160px">
+        <option value="all">All pushed/sent</option>
+        <option value="delivered">Delivered only</option>
+      </select>
+    </div>
+    <div class="cost-note">💡 Rates auto-save hote hain. SMS Transactional/Promotional alag rate se count hoga. Agar panel report mein cost column mila toh <b>auto cross-check</b> bhi hoga — rate galat likha toh ⚠️ dikhega.</div>
+  </div>
+
+  <!-- STEP 2: UPLOADS -->
+  <div class="section-title">📁 STEP 2 — Files Upload Karo (CSV / Excel, multiple bhi chalega)</div>
+  <div class="grid">
+    <div class="ucard" id="card_crm">
+      <div class="clr" onclick="clearCh('crm')">✕ Clear</div>
+      <div class="icon">🗂️</div><div class="nm">CRM (Whole Day)</div>
+      <div class="st" id="st_crm">Required — leads file</div>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('crm',this)"></label>
+    </div>
+    <div class="ucard" id="card_wa">
+      <div class="clr" onclick="clearCh('wa')">✕ Clear</div>
+      <div class="icon">💬</div><div class="nm">WhatsApp Panel</div>
+      <div class="st" id="st_wa">Approved / Not Approved</div>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('wa',this)"></label>
+    </div>
+    <div class="ucard" id="card_sms">
+      <div class="clr" onclick="clearCh('sms')">✕ Clear</div>
+      <div class="icon">📩</div><div class="nm">SMS Gateway</div>
+      <div class="st" id="st_sms">Delivered / Failed</div>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('sms',this)"></label>
+    </div>
+    <div class="ucard" id="card_rcs">
+      <div class="clr" onclick="clearCh('rcs')">✕ Clear</div>
+      <div class="icon">📱</div><div class="nm">RCS Platform</div>
+      <div class="st" id="st_rcs">Pushed / Sent / Failed</div>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('rcs',this)"></label>
+    </div>
+    <div class="ucard" id="card_ads">
+      <div class="clr" onclick="clearCh('ads')">✕ Clear</div>
+      <div class="icon">🔍</div><div class="nm">Google Ads</div>
+      <div class="st" id="st_ads">Spend / Clicks / Conv.</div>
+      <label class="btn">Upload<input type="file" multiple accept=".csv,.xlsx,.xls" onchange="loadFiles('ads',this)"></label>
+      <div class="hint">Ya manual spend: <input type="number" id="adsManual" placeholder="₹" style="width:80px;padding:5px;border:1px solid var(--border);border-radius:8px;" oninput="render()"></div>
+    </div>
+  </div>
+
+  <!-- Column mapping -->
+  <div class="mapping" id="mapBox">
+    <b style="color:var(--green);font-size:13px;">🔧 Column Mapping (auto-detected — galat ho toh yahan fix karo)</b>
+    <div id="mapRows" style="margin-top:10px;"></div>
+    <button class="btn gold" onclick="render()" style="margin-top:6px;">↻ Re-calculate</button>
+  </div>
+
+  <!-- STEP 3: REPORT -->
+  <div class="section-title">📊 STEP 3 — Report</div>
+  <div class="filterbar">
+    <span style="font-size:12px;font-weight:700;color:var(--green);">View:</span>
+    <button class="fbtn active" id="fb_dpr" onclick="setMode('dpr')">DPR (Daily)</button>
+    <button class="fbtn" id="fb_mtd" onclick="setMode('mtd')">MTD</button>
+    <button class="fbtn" id="fb_cpd" onclick="setMode('cpd')">CPD (Cost Analysis)</button>
+    <input type="date" id="dprDate" onchange="render()">
+    <input type="month" id="mtdMonth" onchange="render()" style="display:none;">
+    <span class="hint" id="filterHint"></span>
+  </div>
+
+  <div id="reportArea">
+    <div class="empty">👆 Pehle CRM file upload karo — report yahan ban jayegi.<br><br>
+    <span style="font-size:12px;">Matching logic: har channel ke mobile numbers CRM se match honge → Landed / In Progress / Rejected / Disbursed nikal ke aayega. Scientific notation numbers (9.19E+11) bhi auto-fix ho jayenge. ✅</span></div>
+  </div>
+
+  <div class="actions" id="dlRow" style="display:none;">
+    <button class="btn big" onclick="saveToServer()">☁️ Save Report to Server</button>
+    <button class="btn big gold" onclick="downloadReport()">⬇️ Download Report (Excel)</button>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="section-title">🗄️ SAVED REPORTS — Previous Dates</div>
+  <div id="histBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <span class="hint">Loading history...</span>
+  </div>
+  <div id="histView"></div>
+  <div id="trendBox"></div>
+
+  <div class="footer">SalaryTopup Internal Tool · Data browser mein hi process hota hai, kahin upload nahi hota</div>
+</div>
+
+<script>
+/* ================= STATE ================= */
+const CH = {
+  crm:{label:'CRM', rows:[], headers:[], map:{mobile:'',status:'',date:''}},
+  wa: {label:'WhatsApp', rows:[], headers:[], map:{mobile:'',status:'',cost:''}},
+  sms:{label:'SMS', rows:[], headers:[], map:{mobile:'',status:'',type:'',cost:''}},
+  rcs:{label:'RCS', rows:[], headers:[], map:{mobile:'',status:'',cost:''}},
+  ads:{label:'Google Ads', rows:[], headers:[], map:{cost:'',clicks:'',conv:''}}
+};
+let mode='dpr';
+
+/* ================= HELPERS ================= */
+function normMobile(v){
+  if(v===null||v===undefined) return '';
+  let s = String(v).trim();
+  if(/e\+/i.test(s)){ const n = Number(s); if(!isNaN(n)) s = n.toFixed(0); }
+  s = s.replace(/\D/g,'');
+  if(s.length>10) s = s.slice(-10);
+  return s.length===10 ? s : '';
+}
+function parseDate(v){
+  if(v===null||v===undefined||v==='') return null;
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number'){ // excel serial
+    const d = new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d;
+  }
+  let s = String(v).trim();
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); // dd-mm-yyyy
+  if(m){ let yy=+m[3]; if(yy<100)yy+=2000; const d=new Date(yy,+m[2]-1,+m[1]); if(!isNaN(d))return d; }
+  const d = new Date(s); return isNaN(d)?null:d;
+}
+const sameDay=(a,b)=>a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+const sameMonth=(a,y,m)=>a&&a.getFullYear()===y&&a.getMonth()===m;
+const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+const num=v=>{ if(v===null||v===undefined)return 0; const n=parseFloat(String(v).replace(/[₹,%\s]/g,'').replace(/,/g,'')); return isNaN(n)?0:n; };
+
+function guessCol(headers, keys){
+  const H = headers.map(h=>String(h).toLowerCase());
+  for(const k of keys){ const i = H.findIndex(h=>h.includes(k)); if(i>-1) return headers[i]; }
+  return '';
+}
+
+/* CRM status buckets */
+function crmBucket(s){
+  s = String(s||'').toLowerCase();
+  if(/disburs/.test(s)) return 'disbursed';
+  if(/reject|declin|not eligible|cancel/.test(s)) return 'rejected';
+  return 'inprogress';
+}
+/* Channel delivery buckets */
+function chBucket(ch, s){
+  s = String(s||'').toLowerCase();
+  if(/fail|undeliver|not approved|expired|bounce|error|blocked/.test(s)) return 'failed';
+  if(/deliver|read|seen|approved|success|landed/.test(s)) return 'delivered';
+  if(/pushed|sent|submit|pending|accepted|queue/.test(s)) return 'sent';
+  return 'sent';
+}
+
+/* ================= FILE LOADING ================= */
+async function loadFiles(ch, input){
+  const files = [...input.files]; if(!files.length) return;
+  document.getElementById('st_'+ch).textContent = 'Reading...';
+  let allRows=[], headers=[];
+  for(const f of files){
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, {cellDates:true});
+    for(const sn of wb.SheetNames){
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:''});
+      if(rows.length){ allRows = allRows.concat(rows); if(!headers.length) headers = Object.keys(rows[0]); }
+    }
+  }
+  CH[ch].rows = allRows; CH[ch].headers = headers;
+  autoMap(ch);
+  document.getElementById('card_'+ch).classList.add('loaded');
+  const st = document.getElementById('st_'+ch);
+  st.textContent = `✓ ${files.length} file · ${allRows.length.toLocaleString('en-IN')} rows`;
+  st.classList.add('ok');
+  buildMapUI(); render();
+  input.value='';
+}
+function clearCh(ch){
+  CH[ch].rows=[]; CH[ch].headers=[];
+  document.getElementById('card_'+ch).classList.remove('loaded');
+  const st=document.getElementById('st_'+ch); st.classList.remove('ok');
+  st.textContent={crm:'Required — leads file',wa:'Approved / Not Approved',sms:'Delivered / Failed',rcs:'Pushed / Sent / Failed',ads:'Spend / Clicks / Conv.'}[ch];
+  buildMapUI(); render();
+}
+function autoMap(ch){
+  const h = CH[ch].headers, m = CH[ch].map;
+  if(ch==='ads'){
+    m.cost = guessCol(h,['cost','spend','amount']);
+    m.clicks = guessCol(h,['click']);
+    m.conv = guessCol(h,['conversion','conv','lead']);
+  } else {
+    m.mobile = guessCol(h,['mobile','phone','msisdn','contact','whatsapp','number','to']);
+    m.status = guessCol(h,['status','state','delivery','result','disposition']);
+    if(ch==='crm') m.date = guessCol(h,['created','date','time','applied']);
+    if(ch==='sms') m.type = guessCol(h,['type','route','category','traffic']);
+    if(ch!=='crm') m.cost = guessCol(h,['cost','charge','price','credit','rate','amount']);
+  }
+}
+function smsType(v){
+  const s = String(v||'').toLowerCase();
+  return /trans|txn|otp|service|utility/.test(s) ? 'trans' : 'promo';
+}
+function buildMapUI(){
+  const box = document.getElementById('mapBox'), wrap = document.getElementById('mapRows');
+  let html=''; let any=false;
+  for(const ch in CH){
+    if(!CH[ch].rows.length) continue; any=true;
+    const h = CH[ch].headers, m = CH[ch].map;
+    const sel=(field)=>`<select class="mapsel" onchange="CH['${ch}'].map['${field}']=this.value">`+
+      `<option value="">— none —</option>`+
+      h.map(x=>`<option ${m[field]===x?'selected':''}>${x}</option>`).join('')+`</select>`;
+    if(ch==='ads'){
+      html+=`<div class="maprow"><b>${CH[ch].label}</b> Cost: ${sel('cost')} Clicks: ${sel('clicks')} Conversions: ${sel('conv')}</div>`;
+    } else if(ch==='crm'){
+      html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Date: ${sel('date')}</div>`;
+    } else if(ch==='sms'){
+      html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Msg Type: ${sel('type')} Panel Cost: ${sel('cost')}</div>`;
+    } else {
+      html+=`<div class="maprow"><b>${CH[ch].label}</b> Mobile: ${sel('mobile')} Status: ${sel('status')} Panel Cost: ${sel('cost')}</div>`;
+    }
+  }
+  wrap.innerHTML = html;
+  box.classList.toggle('show', any);
+}
+
+/* ================= FILTERING ================= */
+function setMode(m){
+  mode=m;
+  ['dpr','mtd','cpd'].forEach(x=>document.getElementById('fb_'+x).classList.toggle('active',x===m));
+  document.getElementById('dprDate').style.display = m==='dpr'?'':'none';
+  document.getElementById('mtdMonth').style.display = (m==='mtd'||m==='cpd')?'':'none';
+  render();
+}
+function crmFiltered(){
+  const c = CH.crm; if(!c.rows.length) return [];
+  const dcol = c.map.date;
+  if(!dcol) return c.rows;
+  if(mode==='dpr'){
+    let dv = document.getElementById('dprDate').value;
+    const target = dv? new Date(dv+'T00:00:00') : new Date();
+    return c.rows.filter(r=>sameDay(parseDate(r[dcol]), target));
+  }
+  // mtd & cpd — month filter
+  let mv = document.getElementById('mtdMonth').value;
+  let y,mo;
+  if(mv){ [y,mo]=mv.split('-'); y=+y; mo=+mo-1; } else { const t=new Date(); y=t.getFullYear(); mo=t.getMonth(); }
+  return c.rows.filter(r=>sameMonth(parseDate(r[dcol]), y, mo));
+}
+
+/* ================= REPORT ================= */
+let lastSummary=null;
+function render(){
+  saveCosts();
+  const area = document.getElementById('reportArea');
+  if(!CH.crm.rows.length){ area.innerHTML='<div class="empty">👆 Pehle CRM file upload karo — report yahan ban jayegi.</div>'; document.getElementById('dlRow').style.display='none'; return; }
+
+  const crmRows = crmFiltered();
+  const hint = document.getElementById('filterHint');
+  const dcol = CH.crm.map.date;
+  hint.textContent = dcol ? `CRM filtered: ${crmRows.length.toLocaleString('en-IN')} / ${CH.crm.rows.length.toLocaleString('en-IN')} rows` : '⚠️ CRM date column nahi mila — full file use ho rahi hai';
+
+  // CRM index: mobile -> bucket
+  const crmMap = new Map();
+  const mcol = CH.crm.map.mobile, scol = CH.crm.map.status;
+  let crmTot={landed:0,disbursed:0,rejected:0,inprogress:0};
+  for(const r of crmRows){
+    const mob = normMobile(r[mcol]); if(!mob && mcol) continue;
+    const b = crmBucket(scol? r[scol]:'');
+    crmTot.landed++; crmTot[b]++;
+    if(mob && !crmMap.has(mob)) crmMap.set(mob, b);
+    else if(mob && b==='disbursed') crmMap.set(mob,'disbursed');
+  }
+
+  const costs = {wa:num(document.getElementById('cost_wa').value),
+    sms_t:num(document.getElementById('cost_sms_t').value),
+    sms_p:num(document.getElementById('cost_sms_p').value),
+    rcs:num(document.getElementById('cost_rcs').value)};
+  const basis = document.getElementById('chargeBasis').value;
+
+  const chans=[];
+  for(const ch of ['wa','sms','rcs']){
+    if(!CH[ch].rows.length) continue;
+    const m = CH[ch].map;
+    let sent=0, delivered=0, failed=0, panelCost=0;
+    let tAll=0, tDel=0, pAll=0, pDel=0; // sms type counts
+    const mobs = new Set();
+    for(const r of CH[ch].rows){
+      const b = chBucket(ch, m.status? r[m.status]:'');
+      if(b==='failed') failed++; else if(b==='delivered'){delivered++;} else sent++;
+      if(m.cost) panelCost += num(r[m.cost]);
+      if(ch==='sms'){
+        const t = m.type ? smsType(r[m.type]) : 'promo';
+        if(t==='trans'){ tAll++; if(b==='delivered') tDel++; }
+        else { pAll++; if(b==='delivered') pDel++; }
+      }
+      const mob = normMobile(m.mobile? r[m.mobile]:''); if(mob) mobs.add(mob);
+    }
+    const pushed = CH[ch].rows.length;
+    let landed=0,disb=0,rej=0,prog=0;
+    for(const mob of mobs){
+      const b = crmMap.get(mob);
+      if(b){ landed++; if(b==='disbursed')disb++; else if(b==='rejected')rej++; else prog++; }
+    }
+    let cost, rateLbl, splitLbl='';
+    if(ch==='sms'){
+      const tC = (basis==='delivered'? tDel : tAll);
+      const pC = (basis==='delivered'? pDel : pAll);
+      cost = tC*costs.sms_t + pC*costs.sms_p;
+      rateLbl = `T ${inr(costs.sms_t)} / P ${inr(costs.sms_p)}`;
+      splitLbl = `Trans: ${tAll.toLocaleString('en-IN')} · Promo: ${pAll.toLocaleString('en-IN')}`;
+    } else {
+      const chargeable = basis==='delivered'? delivered : pushed;
+      cost = chargeable * costs[ch];
+      rateLbl = inr(costs[ch]);
+    }
+    // cross-check vs panel's own cost column
+    let check = null;
+    if(m.cost && panelCost>0){
+      const diff = Math.abs(panelCost-cost);
+      check = {panelCost, match: diff <= Math.max(cost*0.05, 1)};
+    }
+    chans.push({name:CH[ch].label, pushed, delivered, failed, cost, rateLbl, splitLbl, check,
+      landed, prog, rej, disb,
+      cpl: landed? cost/landed:0, cpd: disb? cost/disb:0});
+  }
+  // Google Ads
+  if(CH.ads.rows.length || num(document.getElementById('adsManual').value)>0){
+    const m = CH.ads.map;
+    let spend=0, clicks=0, conv=0;
+    for(const r of CH.ads.rows){
+      if(m.cost) spend += num(r[m.cost]);
+      if(m.clicks) clicks += num(r[m.clicks]);
+      if(m.conv) conv += num(r[m.conv]);
+    }
+    const manual = num(document.getElementById('adsManual').value);
+    if(manual>0) spend = manual;
+    chans.push({name:'Google Ads', pushed:clicks||'-', delivered:'-', failed:'-', cost:spend,
+      landed:conv||'-', prog:'-', rej:'-', disb:'-',
+      cpl: conv? spend/conv:0, cpd:0, isAds:true});
+  }
+
+  const totCost = chans.reduce((s,c)=>s+c.cost,0);
+  const totDisb = chans.reduce((s,c)=>s+(c.isAds?0:c.disb),0);
+  const totLand = chans.reduce((s,c)=>s+(c.isAds?0:c.landed),0);
+
+  /* ---------- CPD VIEW ---------- */
+  if(mode==='cpd'){
+    const withDisb = chans.filter(c=>!c.isAds && c.disb>0);
+    const best = withDisb.length? withDisb.reduce((a,b)=>a.cpd<b.cpd?a:b) : null;
+    let html = `
+    <div class="kpis">
+      <div class="kpi"><div class="num" style="color:var(--gold)">${inr(totCost)}</div><div class="lbl">TOTAL SPEND</div></div>
+      <div class="kpi"><div class="num">${totLand? inr(totCost/totLand):'—'}</div><div class="lbl">BLENDED CPL</div></div>
+      <div class="kpi"><div class="num" style="color:var(--purple)">${totDisb? inr(totCost/totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
+      <div class="kpi"><div class="num" style="color:var(--ok);font-size:16px;">${best? '🏆 '+best.name : '—'}</div><div class="lbl">CHEAPEST CPD CHANNEL</div></div>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">💸 EK DISBURSED LEAD KITNE KI PADI — Channel-wise</div>
+    <div class="kpis" style="margin-bottom:16px;">
+      ${chans.filter(c=>!c.isAds).map(c=>`
+        <div class="kpi" style="${best&&c.name===best.name?'border:2px solid var(--ok);':''}">
+          <div class="num" style="color:var(--purple)">${c.disb? inr(c.cpd):'—'}</div>
+          <div class="lbl">${c.name.toUpperCase()} · 1 DISBURSED LEAD ${best&&c.name===best.name?'🏆':''}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px;">${inr(c.cost)} ÷ ${c.disb} disbursed</div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">CPD — Cost Per Disbursal Analysis</div>
+    <div class="twrap"><table>
+      <tr><th>Channel</th><th>Msgs Charged</th><th>Rate ₹/msg</th><th>Cost</th><th>% of Spend</th><th>Landed</th><th>CPL</th><th>Disbursed</th><th>CPD</th><th>Verdict</th></tr>`;
+    const basisNow = document.getElementById('chargeBasis').value;
+    for(const c of chans){
+      const charged = c.isAds ? '-' : (basisNow==='delivered'? c.delivered : c.pushed);
+      const rate = c.isAds ? '-' : (c.rateLbl||'—');
+      let verdict = '—';
+      if(!c.isAds && c.disb>0) verdict = (best && c.name===best.name)? '🏆 Best' : (c.cpd > 2*(best?best.cpd:c.cpd) ? '⚠️ Costly' : '✓ OK');
+      else if(!c.isAds) verdict = '❌ 0 disbursal';
+      let costCell = inr(c.cost);
+      if(c.check){
+        costCell += c.check.match
+          ? `<div style="font-size:10px;color:var(--ok);">✓ Panel: ${inr(c.check.panelCost)}</div>`
+          : `<div style="font-size:10px;color:var(--bad);font-weight:800;">⚠️ Panel: ${inr(c.check.panelCost)}</div>`;
+      }
+      if(c.splitLbl) costCell += `<div style="font-size:10px;color:var(--muted);">${c.splitLbl}</div>`;
+      html += `<tr><td>${c.name}</td><td>${typeof charged==='number'?charged.toLocaleString('en-IN'):charged}</td><td style="font-size:11px;">${rate}</td>
+        <td class="money">${costCell}</td>
+        <td>${totCost? (c.cost/totCost*100).toFixed(1)+'%':'—'}</td>
+        <td>${typeof c.landed==='number'?c.landed.toLocaleString('en-IN'):c.landed}</td>
+        <td>${c.cpl? inr(c.cpl):'—'}</td>
+        <td style="font-weight:800;color:var(--ok)">${typeof c.disb==='number'?c.disb.toLocaleString('en-IN'):c.disb}</td>
+        <td style="font-weight:800;color:var(--purple)">${c.cpd? inr(c.cpd):'—'}</td>
+        <td>${verdict}</td></tr>`;
+    }
+    html += `<tr class="total"><td>TOTAL</td><td colspan="2"></td><td>${inr(totCost)}</td><td>100%</td>
+      <td>${totLand.toLocaleString('en-IN')}</td><td>${totLand? inr(totCost/totLand):'—'}</td>
+      <td>${totDisb.toLocaleString('en-IN')}</td><td>${totDisb? inr(totCost/totDisb):'—'}</td><td></td></tr>
+    </table></div>
+    <div class="hint">💡 CPD = Channel Cost ÷ Disbursals (mobile-number matched from CRM). CPL = Cost ÷ Landed leads. Month filter upar se change karo.</div>`;
+    if(!chans.length) html += `<div class="empty" style="margin-top:12px;">Channel files upload karo — cost analysis yahan aayega.</div>`;
+    area.innerHTML = html;
+    document.getElementById('dlRow').style.display = 'flex';
+    lastSummary = {modeLbl:'CPD — Cost Per Disbursal Analysis', crmTot, chans, totCost, totDisb, totLand};
+    return;
+  }
+
+  const modeLbl = {dpr:'DPR — Daily Performance Report', mtd:'MTD — Month To Date'}[mode];
+  let html = `
+  <div class="kpis">
+    <div class="kpi"><div class="num">${crmTot.landed.toLocaleString('en-IN')}</div><div class="lbl">CRM LEADS LANDED</div></div>
+    <div class="kpi"><div class="num" style="color:var(--ok)">${crmTot.disbursed.toLocaleString('en-IN')}</div><div class="lbl">DISBURSED</div></div>
+    <div class="kpi"><div class="num" style="color:var(--warn)">${crmTot.inprogress.toLocaleString('en-IN')}</div><div class="lbl">IN PROGRESS</div></div>
+    <div class="kpi"><div class="num" style="color:var(--bad)">${crmTot.rejected.toLocaleString('en-IN')}</div><div class="lbl">REJECTED</div></div>
+    <div class="kpi"><div class="num" style="color:var(--gold)">${inr(totCost)}</div><div class="lbl">TOTAL SPEND</div></div>
+    <div class="kpi"><div class="num" style="color:var(--purple)">${totDisb? inr(totCost/totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
+  </div>
+  <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">${modeLbl} — Channel-wise Funnel</div>
+  <div class="twrap"><table>
+    <tr><th>Channel</th><th>Pushed</th><th>Delivered</th><th>Failed</th><th>Cost</th><th>Landed (CRM)</th><th>In Progress</th><th>Rejected</th><th>Disbursed</th><th>CPL</th><th>CPD</th></tr>`;
+  for(const c of chans){
+    let costCell = inr(c.cost);
+    if(c.check){
+      costCell += c.check.match
+        ? `<div style="font-size:10px;color:var(--ok);">✓ Panel: ${inr(c.check.panelCost)}</div>`
+        : `<div style="font-size:10px;color:var(--bad);font-weight:800;">⚠️ Panel: ${inr(c.check.panelCost)}</div>`;
+    }
+    if(c.splitLbl) costCell += `<div style="font-size:10px;color:var(--muted);">${c.splitLbl}</div>`;
+    html += `<tr><td>${c.name}</td><td>${typeof c.pushed==='number'?c.pushed.toLocaleString('en-IN'):c.pushed}</td>
+      <td style="color:var(--ok);font-weight:700">${typeof c.delivered==='number'?c.delivered.toLocaleString('en-IN'):c.delivered}</td>
+      <td style="color:var(--bad);font-weight:700">${typeof c.failed==='number'?c.failed.toLocaleString('en-IN'):c.failed}</td>
+      <td class="money">${costCell}</td>
+      <td>${typeof c.landed==='number'?c.landed.toLocaleString('en-IN'):c.landed}</td>
+      <td>${typeof c.prog==='number'?c.prog.toLocaleString('en-IN'):c.prog}</td>
+      <td>${typeof c.rej==='number'?c.rej.toLocaleString('en-IN'):c.rej}</td>
+      <td style="font-weight:800;color:var(--ok)">${typeof c.disb==='number'?c.disb.toLocaleString('en-IN'):c.disb}</td>
+      <td>${c.cpl? inr(c.cpl):'—'}</td><td>${c.cpd? inr(c.cpd):'—'}</td></tr>`;
+  }
+  html += `<tr class="total"><td>TOTAL</td><td colspan="3"></td><td>${inr(totCost)}</td>
+    <td>${totLand.toLocaleString('en-IN')}</td><td colspan="2"></td><td>${totDisb.toLocaleString('en-IN')}</td>
+    <td>${totLand? inr(totCost/totLand):'—'}</td><td>${totDisb? inr(totCost/totDisb):'—'}</td></tr>
+  </table></div>
+  <div class="hint">💡 Landed = channel ke numbers jo CRM mein mile (mobile-number match). CPL = Cost/Landed · CPD = Cost/Disbursed. WhatsApp/SMS/RCS ka cost = ${basis==='delivered'?'sirf delivered':'saare pushed'} msgs × rate.</div>`;
+
+  if(!chans.length) html += `<div class="empty" style="margin-top:12px;">Channel files (WhatsApp/SMS/RCS/Ads) upload karo — funnel table yahan aayega.</div>`;
+
+  area.innerHTML = html;
+  document.getElementById('dlRow').style.display = 'flex';
+  lastSummary = {modeLbl, crmTot, chans, totCost, totDisb, totLand};
+}
+
+/* ================= EXPORT ================= */
+function downloadReport(){
+  if(!lastSummary) return;
+  const {modeLbl, crmTot, chans, totCost, totDisb, totLand} = lastSummary;
+  const rows = [
+    ['SALARYTOPUP — '+modeLbl], ['Generated', new Date().toLocaleString('en-IN')], [],
+    ['CRM SUMMARY'], ['Landed', crmTot.landed], ['Disbursed', crmTot.disbursed],
+    ['In Progress', crmTot.inprogress], ['Rejected', crmTot.rejected], [],
+    ['CHANNEL FUNNEL'],
+    ['Channel','Pushed','Delivered','Failed','Calculated Cost (₹)','Panel Cost (₹)','Cost Match','Landed','In Progress','Rejected','Disbursed','CPL (₹)','CPD (₹)']
+  ];
+  for(const c of chans) rows.push([c.name,c.pushed,c.delivered,c.failed,+c.cost.toFixed(2),
+    c.check? +c.check.panelCost.toFixed(2):'', c.check? (c.check.match?'MATCH ✓':'MISMATCH ⚠️'):'',
+    c.landed,c.prog,c.rej,c.disb, c.cpl?+c.cpl.toFixed(2):'', c.cpd?+c.cpd.toFixed(2):'']);
+  rows.push(['TOTAL','','','',+totCost.toFixed(2),'','',totLand,'','',totDisb, totLand?+(totCost/totLand).toFixed(2):'', totDisb?+(totCost/totDisb).toFixed(2):'']);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:10},{wch:11},{wch:10},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Report');
+  XLSX.writeFile(wb, `SalaryTopup_${mode.toUpperCase()}_Report.xlsx`);
+}
+
+/* ================= COST PERSISTENCE ================= */
+async function saveCosts(){
+  try{
+    await window.storage.set('report-costs', JSON.stringify({
+      wa:document.getElementById('cost_wa').value,
+      sms_t:document.getElementById('cost_sms_t').value,
+      sms_p:document.getElementById('cost_sms_p').value,
+      rcs:document.getElementById('cost_rcs').value,
+      basis:document.getElementById('chargeBasis').value
+    }));
+  }catch(e){}
+}
+async function loadCosts(){
+  try{
+    const r = await window.storage.get('report-costs');
+    if(r && r.value){
+      const c = JSON.parse(r.value);
+      if(c.wa) document.getElementById('cost_wa').value=c.wa;
+      if(c.sms_t) document.getElementById('cost_sms_t').value=c.sms_t;
+      if(c.sms_p) document.getElementById('cost_sms_p').value=c.sms_p;
+      if(c.rcs) document.getElementById('cost_rcs').value=c.rcs;
+      if(c.basis) document.getElementById('chargeBasis').value=c.basis;
+    }
+  }catch(e){}
+}
+['cost_wa','cost_sms_t','cost_sms_p','cost_rcs','chargeBasis'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+document.getElementById('dprDate').valueAsDate = new Date();
+loadCosts();
+
+/* ================= SERVER (Vercel Blob) ================= */
+let serverOK = false;
+async function saveToServer(){
+  if(!lastSummary){ alert('Pehle report generate karo'); return; }
+  let key;
+  if(mode==='dpr'){ key = 'DPR_' + (document.getElementById('dprDate').value || new Date().toISOString().slice(0,10)); }
+  else if(mode==='mtd'){ key = 'MTD_' + (document.getElementById('mtdMonth').value || new Date().toISOString().slice(0,7)); }
+  else { key = 'CPD_' + (document.getElementById('mtdMonth').value || new Date().toISOString().slice(0,7)); }
+  const payload = {...lastSummary, savedAt:new Date().toISOString(), mode,
+    costs:{wa:document.getElementById('cost_wa').value, sms_t:document.getElementById('cost_sms_t').value,
+           sms_p:document.getElementById('cost_sms_p').value, rcs:document.getElementById('cost_rcs').value}};
+  try{
+    const r = await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,payload})});
+    const j = await r.json();
+    if(j.ok){ alert('✅ Saved: '+key); loadHistory(); }
+    else alert('❌ Save failed: '+(j.error||''));
+  }catch(e){ alert('❌ Server nahi mila — ye feature Vercel pe deploy hone ke baad chalega.'); }
+}
+async function loadHistory(){
+  const bar = document.getElementById('histBar');
+  try{
+    const r = await fetch('/api/list'); const j = await r.json();
+    serverOK = true;
+    if(!j.reports || !j.reports.length){ bar.innerHTML = '<span class="hint">Abhi koi saved report nahi. Report banao aur ☁️ Save dabao.</span>'; return; }
+    bar.innerHTML = j.reports.map(x=>
+      `<button class="fbtn" onclick="viewSaved('${x.key}')">${x.key.replace(/_/g,' · ')}</button>`).join('') +
+      `<button class="fbtn" style="border-color:var(--gold);color:var(--gold);" onclick="showTrend()">📈 Trend</button>`;
+    window._histKeys = j.reports.map(x=>x.key);
+  }catch(e){
+    bar.innerHTML = '<span class="hint">☁️ Server history Vercel pe deploy hone ke baad yahan dikhegi (previous dates ke saved reports).</span>';
+  }
+}
+function summaryTable(s){
+  let h = `<div class="kpis" style="margin-top:10px;">
+    <div class="kpi"><div class="num">${(s.crmTot.landed||0).toLocaleString('en-IN')}</div><div class="lbl">LANDED</div></div>
+    <div class="kpi"><div class="num" style="color:var(--ok)">${(s.crmTot.disbursed||0).toLocaleString('en-IN')}</div><div class="lbl">DISBURSED</div></div>
+    <div class="kpi"><div class="num" style="color:var(--gold)">${inr(s.totCost)}</div><div class="lbl">SPEND</div></div>
+    <div class="kpi"><div class="num" style="color:var(--purple)">${s.totDisb? inr(s.totCost/s.totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
+  </div>
+  <div class="twrap"><table><tr><th>Channel</th><th>Pushed</th><th>Delivered</th><th>Failed</th><th>Cost</th><th>Landed</th><th>Disbursed</th><th>CPD</th></tr>`;
+  for(const c of (s.chans||[])){
+    h += `<tr><td>${c.name}</td><td>${c.pushed??''}</td><td>${c.delivered??''}</td><td>${c.failed??''}</td>
+      <td class="money">${inr(c.cost)}</td><td>${c.landed??''}</td><td style="font-weight:800;color:var(--ok)">${c.disb??''}</td>
+      <td style="font-weight:800;color:var(--purple)">${c.cpd? inr(c.cpd):'—'}</td></tr>`;
+  }
+  return h + '</table></div>';
+}
+async function viewSaved(key){
+  const v = document.getElementById('histView'); document.getElementById('trendBox').innerHTML='';
+  v.innerHTML = '<div class="hint">Loading '+key+'...</div>';
+  try{
+    const r = await fetch('/api/get?key='+encodeURIComponent(key)); const s = await r.json();
+    v.innerHTML = `<div style="font-size:13px;font-weight:800;color:var(--green);margin:6px 0;">📄 ${key.replace(/_/g,' · ')} <span class="hint">(saved ${new Date(s.savedAt).toLocaleString('en-IN')})</span></div>` + summaryTable(s);
+  }catch(e){ v.innerHTML = '<div class="hint">Load nahi hua.</div>'; }
+}
+async function showTrend(){
+  const box = document.getElementById('trendBox'); document.getElementById('histView').innerHTML='';
+  box.innerHTML = '<div class="hint">Building trend...</div>';
+  const keys = (window._histKeys||[]).filter(k=>k.startsWith('DPR_')).sort();
+  if(!keys.length){ box.innerHTML='<div class="hint">Trend ke liye DPR reports save karo.</div>'; return; }
+  let rows='';
+  for(const k of keys){
+    try{
+      const r = await fetch('/api/get?key='+encodeURIComponent(k)); const s = await r.json();
+      rows += `<tr><td>${k.replace('DPR_','')}</td><td>${(s.crmTot.landed||0).toLocaleString('en-IN')}</td>
+        <td style="color:var(--ok);font-weight:700">${(s.crmTot.disbursed||0).toLocaleString('en-IN')}</td>
+        <td class="money">${inr(s.totCost)}</td>
+        <td style="font-weight:800;color:var(--purple)">${s.totDisb? inr(s.totCost/s.totDisb):'—'}</td></tr>`;
+    }catch(e){}
+  }
+  box.innerHTML = `<div style="font-size:13px;font-weight:800;color:var(--green);margin:6px 0;">📈 Day-wise Trend (saved DPRs)</div>
+    <div class="twrap"><table style="min-width:500px;"><tr><th>Date</th><th>Landed</th><th>Disbursed</th><th>Spend</th><th>CPD</th></tr>${rows}</table></div>`;
+}
+loadHistory();
+
+</script>
+</body>
+</html>
