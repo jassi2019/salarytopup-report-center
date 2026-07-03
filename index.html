@@ -523,7 +523,7 @@ function render(){
     </div>
 `;
     if(hasUserType){
-      const n=crmByType.new, rl=crmByType.reloan;
+      const n=crmByType['new'], rl=crmByType['reloan'];
       html += `
       <div style="font-size:13px;font-weight:800;color:var(--green);margin:6px 0 8px;">👤 User Type Breakdown — New vs Reloan</div>
       <div class="twrap" style="margin-bottom:16px;"><table style="min-width:500px;">
@@ -591,7 +591,7 @@ function render(){
   }
 
   const modeLbl = {dpr:'DPR — Daily Performance Report', mtd:'MTD — Month To Date'}[mode];
-  const n=crmByType.new, rl=crmByType.reloan;
+  const n=crmByType['new'], rl=crmByType['reloan'];
   let html = `
   <div class="kpis">
     <div class="kpi"><div class="num">${crmTot.landed.toLocaleString('en-IN')}</div><div class="lbl">CRM LEADS LANDED</div></div>
@@ -665,17 +665,17 @@ function downloadReport(){
     ['In Progress', crmTot.inprogress], ['Rejected', crmTot.rejected], [],
   ];
   if(hasUserType && crmByType){
-    const n=crmByType.new, rl=crmByType.reloan;
+    const n=crmByType['new'], rl=crmByType['reloan'];
     rows.push(['USER TYPE BREAKDOWN'],
       ['Type','Landed','Disbursed','In Progress','Rejected','Disb %'],
-      ['New', n.landed, n.disbursed, n.inprogress, n.rejected, n.landed? +(n.disbursed/n.landed*100).toFixed(1)+'%':'—'],
-      ['Reloan', rl.landed, rl.disbursed, rl.inprogress, rl.rejected, rl.landed? +(rl.disbursed/rl.landed*100).toFixed(1)+'%':'—'],
+      ['New', n.landed, n.disbursed, n.inprogress, n.rejected, n.landed ? (n.disbursed/n.landed*100).toFixed(1)+'%' : '—'],
+      ['Reloan', rl.landed, rl.disbursed, rl.inprogress, rl.rejected, rl.landed ? (rl.disbursed/rl.landed*100).toFixed(1)+'%' : '—'],
       []);
   }
   rows.push(
     ['CHANNEL FUNNEL'],
     ['Channel','Pushed','Delivered','Failed','Calculated Cost (₹)','Panel Cost (₹)','Cost Match','Landed','In Progress','Rejected','Disbursed','CPL (₹)','CPD (₹)']
-  ];
+  );
   for(const c of chans) rows.push([c.name,c.pushed,c.delivered,c.failed,+c.cost.toFixed(2),
     c.check? +c.check.panelCost.toFixed(2):'', c.check? (c.check.match?'MATCH ✓':'MISMATCH ⚠️'):'',
     c.landed,c.prog,c.rej,c.disb, c.cpl?+c.cpl.toFixed(2):'', c.cpd?+c.cpd.toFixed(2):'']);
@@ -756,8 +756,8 @@ function summaryTable(s){
     <div class="kpi"><div class="num" style="color:var(--purple)">${s.totDisb? inr(s.totCost/s.totDisb):'—'}</div><div class="lbl">BLENDED CPD</div></div>
   </div>`;
   if(s.hasUserType && s.crmByType){
-    const n=s.crmByType.new||{landed:0,disbursed:0,inprogress:0,rejected:0};
-    const rl=s.crmByType.reloan||{landed:0,disbursed:0,inprogress:0,rejected:0};
+    const n=s.crmByType['new']||{landed:0,disbursed:0,inprogress:0,rejected:0};
+    const rl=s.crmByType['reloan']||{landed:0,disbursed:0,inprogress:0,rejected:0};
     h += `<div style="font-size:12px;font-weight:800;color:var(--green);margin:8px 0 6px;">👤 New vs Reloan</div>
     <div class="twrap" style="margin-bottom:10px;"><table style="min-width:400px;">
       <tr><th>Type</th><th>Landed</th><th>Disbursed</th><th>In Prog</th><th>Rejected</th><th>Disb %</th></tr>
